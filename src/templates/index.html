@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Immersive Bible Reader</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f4f4f4;
+        }
+
+        #controls {
+            padding: 20px;
+            background: white;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        #viewer {
+            position: relative;
+            margin: 20px;
+            background: white;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+
+        .word {
+            position: absolute;
+            white-space: nowrap;
+        }
+
+        .italic {
+            color: purple;
+            font-style: italic;
+        }
+
+        /* Reader View Styles */
+        #viewer.reader-view {
+            width: 800px;
+            padding: 40px;
+            position: static;
+            height: auto !important;
+            display: block;
+            text-align: justify;
+            line-height: 1.6;
+        }
+
+        .reader-view .word {
+            position: static;
+            display: inline;
+            margin-right: 0.3em; /* Adds spacing between words */
+            font-size: 1.2rem;
+        }
+
+        button {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            background: white;
+            border-radius: 4px;
+        }
+
+        button.active {
+            background: #eee;
+            border-color: #333;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="controls">
+        <button id="facsimileBtn" class="active">Facsimile View</button>
+        <button id="readerBtn">Reader View</button>
+        <input type="number" id="pageNumber" value="0" min="0" style="width: 50px;">
+        <button id="loadPage">Load Page</button>
+    </div>
+
+    <div id="viewer">
+        <!-- Reconstituted text will appear here -->
+    </div>
+
+    <script>
+        const viewer = document.getElementById('viewer');
+        const facsimileBtn = document.getElementById('facsimileBtn');
+        const readerBtn = document.getElementById('readerBtn');
+        const pageNumberInput = document.getElementById('pageNumber');
+        const loadPageBtn = document.getElementById('loadPage');
+
+        let currentData = null;
+
+        async function loadPage(pageNum) {
+            viewer.innerHTML = "Loading...";
+            try {
+                const response = await fetch(`/api/page/${pageNum}`);
+                if (!response.ok) throw new Error("Failed to load page data.");
+
+                currentData = await response.json();
+                renderPage();
+            } catch (error) {
+                viewer.innerHTML = "Error: " + error.message;
+            }
+        }
+
+        function renderPage() {
+            if (!currentData) return;
+
+            const isReaderView = viewer.classList.contains('reader-view');
+            viewer.innerHTML = "";
+
+            if (!isReaderView) {
+                // Adjust viewer size to match page dimensions (at 4x scale factor from backend)
+                viewer.style.width = currentData.width + "px";
+                viewer.style.height = currentData.height + "px";
+            } else {
+                viewer.style.width = "800px";
+                viewer.style.height = "auto";
+            }
+
+            currentData.words.forEach(word => {
+                const span = document.createElement('span');
+                span.textContent = word.text;
+                span.className = 'word';
+                if (word.italic) {
+                    span.classList.add('italic');
+                }
+
+                if (!isReaderView) {
+                    // Coordinates from Tesseract at the high DPI scale
+                    span.style.left = word.left + "px";
+                    span.style.top = word.top + "px";
+                    span.style.width = word.width + "px";
+                    span.style.height = word.height + "px";
+                    // Set font-size based on height, using a scale to fit well
+                    span.style.fontSize = (word.height * 0.75) + "px";
+                }
+
+                viewer.appendChild(span);
+
+                // Add a space after the word if in reader view to ensure they aren't smashed together
+                if (isReaderView) {
+                    const space = document.createTextNode(" ");
+                    viewer.appendChild(space);
+                }
+            });
+        }
+
+        facsimileBtn.onclick = () => {
+            viewer.classList.remove('reader-view');
+            facsimileBtn.classList.add('active');
+            readerBtn.classList.remove('active');
+            renderPage();
+        };
+
+        readerBtn.onclick = () => {
+            viewer.classList.add('reader-view');
+            readerBtn.classList.add('active');
+            facsimileBtn.classList.remove('active');
+            renderPage();
+        };
+
+        loadPageBtn.onclick = () => {
+            loadPage(pageNumberInput.value);
+        };
+
+        // Initially load a page to test if desired
+        // loadPage(0);
+    </script>
+</body>
+</html>
